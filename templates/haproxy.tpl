@@ -23,6 +23,6 @@ frontend http-in
 backend gunicorn_group
     mode http
     balance roundrobin
-    % for instance in instances['security-group-1']:
+    % for instance in instances:
     server ${ instance.id } ${ instance.private_dns_name }:8000 maxconn 32
     % endfor
