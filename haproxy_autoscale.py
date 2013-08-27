@@ -1,6 +1,5 @@
 import boto
 import logging
-import settings
 from mako.template import Template
 
 def get_running_instances(autoscaling_groups=[]):
@@ -14,17 +13,19 @@ def get_running_instances(autoscaling_groups=[]):
     # get all the available autoscaling groups
     autoscale_conn = boto.connect_autoscale()
 
-    groups = autoscale_conn.get_all_groups(settings.autoscaling_groups)
+    groups = autoscale_conn.get_all_groups(autoscaling_groups)
     
     instance_ids =[]
     for group in groups:
-        instances = []
-        for instance in instances:
-            if instance.state == 'inService':
+        for instance in group.instances:
+            if instance.lifecycle_state == 'InService':
                 instance_ids.append(instance.instance_id)
 
-    reservations = ec2_conn.get_all_instances(instance_ids)
-    return [i for r in reservations for i in r.instances]
+    if len(instance_ids) > 0:
+        reservations = ec2_conn.get_all_instances(instance_ids)
+        return [i for r in reservations for i in r.instances]
+    else:
+        return []
 
 
 def file_contents(filename=None, content=None):
