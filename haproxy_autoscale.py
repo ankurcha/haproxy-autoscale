@@ -1,63 +1,31 @@
-from boto.ec2 import EC2Connection
-from boto.ec2.securitygroup import SecurityGroup
+import boto
 import logging
 from mako.template import Template
-import urllib2
 
-def get_self_instance_id():
-    '''
-    Get this instance's id.
-    '''
-    logging.debug('get_self_instance_id()')
-    response = urllib2.urlopen('http://169.254.169.254/1.0/meta-data/instance-id')
-    instance_id = response.read()
-    return instance_id
-
-
-def steal_elastic_ip(access_key=None, secret_key=None, ip=None):
-    '''
-    Assign an elastic IP to this instance.
-    '''
-    logging.debug('steal_elastic_ip()')
-    instance_id = get_self_instance_id()
-    conn = EC2Connection(aws_access_key_id=access_key,
-                         aws_secret_access_key=secret_key)
-    conn.associate_address(instance_id=instance_id, public_ip=ip)
-
-
-def get_running_instances(access_key=None, secret_key=None, security_group=None):
+def get_running_instances(autoscaling_groups=[]):
     '''
     Get all running instances. Only within a security group if specified.
     '''
     logging.debug('get_running_instances()')
 
-    instances_all_regions_list = []
-    conn = EC2Connection(aws_access_key_id=access_key,
-                         aws_secret_access_key=secret_key)
-    ec2_region_list = conn.get_all_regions()
+    ec2_conn = boto.connect_ec2()
 
-    if security_group:
-        for index, region in enumerate(ec2_region_list):
-            conn = EC2Connection(aws_access_key_id=access_key,
-                                 aws_secret_access_key=secret_key,
-                                 region=ec2_region_list[index])
-            sg = SecurityGroup(connection=conn, name=security_group)
-            running_instances = [i for i in sg.instances() if i.state == 'running']
-            if running_instances:
-                for instance in running_instances:
-                    instances_all_regions_list.append(instance)
+    # get all the available autoscaling groups
+    autoscale_conn = boto.connect_autoscale()
+
+    groups = autoscale_conn.get_all_groups(autoscaling_groups)
+    
+    instance_ids =[]
+    for group in groups:
+        for instance in group.instances:
+            if instance.lifecycle_state == 'InService':
+                instance_ids.append(instance.instance_id)
+
+    if len(instance_ids) > 0:
+        reservations = ec2_conn.get_all_instances(instance_ids)
+        return [i for r in reservations for i in r.instances]
     else:
-        for index, region in enumerate(ec2_region_list):
-            conn = EC2Connection(aws_access_key_id=access_key,
-                                 aws_secret_access_key=secret_key,
-                                 region=ec2_region_list[index])
-            reserved_instances = conn.get_all_instances()
-            if reserved_instances:
-                for reservation in reserved_instances:
-                    for instance in reservation.instances:
-                        if instance.stat == 'running':
-                            instances_all_regions_list.append(instance)
-    return instances_all_regions_list
+        return []
 
 
 def file_contents(filename=None, content=None):

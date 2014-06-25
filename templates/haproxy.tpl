@@ -1,33 +1,28 @@
 global  
+    maxconn 4096
+    user haproxy
+    group haproxy
     daemon
-    maxconn 256
 
 defaults
+    log global
+    log /var/log/haproxy.log local0 err
     mode http
+    option httplog
+    option dontlognull
+    option redispatch
     timeout connect 5000ms
-    timeout client 5000ms
-    timeout server 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+    retries 3
 
-frontend www *:80
-    mode http
-    maxconn 50000
-    default_backend servers
+frontend http-in
+    bind *:8002
+    default_backend gunicorn_group
 
-backend servers
-    mode http
-    balance roundrobin
-    % for instance in instances['security-group-1']:
-    server ${ instance.id } ${ instance.private_dns_name }
-    % endfor
-
-frontend java *:8080,*:8443
-    mode http
-    maxconn 50000
-    default_backend java_servers
-
-backend java_servers
+backend gunicorn_group
     mode http
     balance roundrobin
-    % for instance in instances['security-group-2']:
-    server ${ instance.id } ${ instance.private_dns_name }
+    % for instance in instances:
+    server ${ instance.id } ${ instance.private_dns_name }:8000 maxconn 32
     % endfor
